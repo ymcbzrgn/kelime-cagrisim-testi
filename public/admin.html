@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Paneli - Kelime Çağrışım Testi</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status-card h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .user-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .user-item {
+            padding: 8px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .user-item:last-child {
+            border-bottom: none;
+        }
+        .submitted-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-start {
+            background: #4CAF50;
+            flex: 1;
+            padding: 15px;
+            font-size: 18px;
+        }
+        .btn-finish {
+            background: #f44336;
+            flex: 1;
+            padding: 15px;
+            font-size: 18px;
+        }
+        .status-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-ready { background: #FFC107; color: white; }
+        .status-active { background: #4CAF50; color: white; }
+        .status-finished { background: #9E9E9E; color: white; }
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="logout-btn" onclick="logout()">Çıkış</button>
+
+        <!-- Login Section -->
+        <div id="loginSection" class="card">
+            <h2>🔐 Admin Girişi</h2>
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <label for="adminUsername">Kullanıcı Adı:</label>
+                    <input type="text" id="adminUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="adminPassword">Şifre:</label>
+                    <input type="password" id="adminPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Giriş Yap</button>
+            </form>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboardSection" style="display: none;">
+            <div class="admin-header">
+                <h1>📊 Admin Paneli</h1>
+                <p>Kelime Çağrışım Testi Yönetimi</p>
+            </div>
+
+            <div class="dashboard">
+                <!-- Status Card -->
+                <div class="status-card">
+                    <h3>Test Durumu</h3>
+                    <div id="testStatus">
+                        <p>Durum: <span class="status-indicator status-ready">Hazır</span></p>
+                        <p>Test Kelimesi: <strong id="currentWord">-</strong></p>
+                        <p>Test ID: <span id="testId">-</span></p>
+                    </div>
+                </div>
+
+                <!-- Users Card -->
+                <div class="status-card">
+                    <h3>Bağlı Kullanıcılar (<span id="userCount">0</span>)</h3>
+                    <div class="user-list" id="userList">
+                        <p style="text-align: center; color: #999;">Henüz kullanıcı yok</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Controls -->
+            <div class="card">
+                <h3>Test Kontrolü</h3>
+                <form id="testForm">
+                    <div class="form-group">
+                        <label for="testWord">Test Kelimesi:</label>
+                        <input type="text" id="testWord" placeholder="Kelimeyi girin..." required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="saveWordBtn">Kaydet</button>
+                </form>
+
+                <div class="test-controls">
+                    <button class="btn btn-start" id="startBtn" disabled>
+                        🚀 BAŞLAT
+                    </button>
+                    <button class="btn btn-finish" id="finishBtn" disabled>
+                        🏁 BİTİR
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Tests -->
+            <div class="card" style="margin-top: 20px;">
+                <h3>Son Testler</h3>
+                <div id="recentTests">
+                    <p style="text-align: center; color: #999;">Yükleniyor...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="/js/admin.js"></script>
+</body>
+</html>
