@@ -48,3 +48,5 @@ temp/
 # OS files
 Thumbs.db
 desktop.ini
+nul
+.claude/settings.local.json

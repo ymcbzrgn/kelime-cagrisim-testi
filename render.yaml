@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: kelime-cagrisim-testi
+    env: node
+    region: frankfurt # En yakın bölge (Türkiye'ye)
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+    autoDeploy: true
+    healthCheckPath: /

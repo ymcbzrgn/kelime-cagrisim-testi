@@ -19,12 +19,23 @@ const chartsRoutes = require('./src/routes/charts');
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
+
+// Dynamic CORS configuration for production
+const getCorsOrigin = () => {
+    if (process.env.NODE_ENV === 'production') {
+        // Render.com otomatik URL'yi kullan
+        return process.env.RENDER_EXTERNAL_URL
+            ? [process.env.RENDER_EXTERNAL_URL]
+            : true; // Tüm originlere izin ver (geçici)
+    }
+    return ['http://localhost:3000'];
+};
+
 const io = socketIO(server, {
     cors: {
-        origin: process.env.NODE_ENV === 'production'
-            ? process.env.ALLOWED_ORIGINS?.split(',')
-            : ['http://localhost:3000'],
-        methods: ['GET', 'POST']
+        origin: getCorsOrigin(),
+        methods: ['GET', 'POST'],
+        credentials: true
     }
 });
 
@@ -32,25 +43,25 @@ const io = socketIO(server, {
 const PORT = process.env.PORT || 3000;
 
 // Middleware configuration
+// Helmet CSP - relaxed for development, allows inline styles and CDN resources
 app.use(helmet({
-    contentSecurityPolicy: {
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'",
                 "https://cdn.jsdelivr.net",
                 "https://cdn.socket.io"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*"],
+            connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*", "ws:", "wss:"],
         },
-    },
+    } : false, // Disable CSP in development for easier debugging
 }));
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production'
-        ? process.env.ALLOWED_ORIGINS?.split(',')
-        : true,
+    origin: getCorsOrigin(),
     credentials: true
 }));
 
@@ -77,8 +88,17 @@ app.use(session({
     }
 }));
 
-// Static files
-app.use(express.static('public'));
+// Static files - serve CSS, JS, images from public folder
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, filePath) => {
+        // Set correct MIME types for CSS and JS files
+        if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        } else if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+    }
+}));
 
 // API Routes
 app.use('/api/admin', adminRoutes);

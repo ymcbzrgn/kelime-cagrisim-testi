@@ -71,51 +71,8 @@ class SocketHandler {
                 }
             });
 
-            // Handle word submission
-            socket.on('submit-words', async (data) => {
-                try {
-                    const { words } = data;
-                    const user = this.connectedUsers.get(socket.id);
-
-                    if (!user) {
-                        socket.emit('error', { message: 'Kullanıcı oturumu bulunamadı' });
-                        return;
-                    }
-
-                    if (user.has_submitted) {
-                        socket.emit('error', { message: 'Zaten cevap gönderdiniz' });
-                        return;
-                    }
-
-                    const activeTest = await database.getActiveTest();
-                    if (!activeTest) {
-                        socket.emit('error', { message: 'Aktif test bulunamadı' });
-                        return;
-                    }
-
-                    // Save responses
-                    await database.saveResponses(user.id, activeTest.id, words);
-                    await database.markUserSubmitted(user.id);
-
-                    // Update user status in memory
-                    user.has_submitted = true;
-                    this.connectedUsers.set(socket.id, user);
-
-                    // Confirm submission
-                    socket.emit('submission-confirmed', { success: true });
-
-                    // Notify admins
-                    this.io.to('admin-room').emit('user-submitted', {
-                        username: user.username,
-                        wordCount: words.filter(w => w && w.trim()).length
-                    });
-
-                    console.log(`✓ Kelimeler kaydedildi: ${user.username}`);
-                } catch (error) {
-                    console.error('Word submission error:', error);
-                    socket.emit('error', { message: 'Kaydetme hatası' });
-                }
-            });
+            // Note: Word submission is handled via HTTP API in src/routes/user.js
+            // This prevents duplicate submissions that were happening when using both WebSocket and HTTP
 
             // Handle admin connection
             socket.on('admin-connected', () => {
@@ -204,6 +161,7 @@ class SocketHandler {
     async sendAdminUpdate(socket) {
         try {
             const activeTest = await database.getActiveTest();
+            const readyTest = await database.getReadyTest();
             const latestTest = await database.getLatestTest();
 
             const userList = Array.from(this.connectedUsers.values()).map(user => ({
@@ -214,6 +172,7 @@ class SocketHandler {
 
             socket.emit('admin-status', {
                 activeTest,
+                readyTest,
                 latestTest,
                 userCount: this.connectedUsers.size,
                 users: userList

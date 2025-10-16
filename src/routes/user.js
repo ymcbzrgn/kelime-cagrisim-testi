@@ -164,16 +164,8 @@ router.get('/check-redirect', async (req, res) => {
 
         // Check if user's test is finished
         if (user.test_id) {
-            const test = await new Promise((resolve, reject) => {
-                database.db.get(
-                    'SELECT * FROM tests WHERE id = ?',
-                    [user.test_id],
-                    (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    }
-                );
-            });
+            // Use proper Database method instead of direct db access
+            const test = await database.getTestById(user.test_id);
 
             if (test && test.status === 'finished') {
                 return res.json({

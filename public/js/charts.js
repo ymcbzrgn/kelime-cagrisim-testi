@@ -1,15 +1,66 @@
 // Charts Page JavaScript
 let currentTestId = null;
 let chartInstances = {};
+let socket = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Charts page loaded, initializing...');
     loadChartData();
     loadTestList();
+    initializeSocket();
+    setupChartResize();
 });
+
+// Setup chart resize handler (only once)
+function setupChartResize() {
+    window.addEventListener('resize', () => {
+        Object.values(chartInstances).forEach(chart => {
+            if (chart && !chart.isDisposed()) {
+                chart.resize();
+            }
+        });
+    });
+}
+
+function initializeSocket() {
+    if (typeof io !== 'function') {
+        console.warn('Socket.io not available, skipping realtime reset listener');
+        return;
+    }
+
+    socket = io();
+
+    const redirectToNameEntry = (reason) => {
+        console.log('Redirecting to name entry due to:', reason);
+
+        try {
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem('username');
+        } catch (err) {
+            console.error('Local storage clear error:', err);
+        }
+
+        try {
+            sessionStorage?.clear();
+        } catch (err) {
+            console.error('Session storage clear error:', err);
+        }
+
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+
+        window.location.href = '/';
+    };
+
+    socket.on('user-reset', () => redirectToNameEntry('user-reset'));
+    socket.on('emergency-reset', () => redirectToNameEntry('emergency-reset'));
+}
 
 // Load chart data
 async function loadChartData(testId = null) {
+    console.log('Loading chart data... TestId:', testId);
     const loading = document.getElementById('loading');
     const statisticsSection = document.getElementById('statisticsSection');
 
@@ -22,28 +73,50 @@ async function loadChartData(testId = null) {
             ? `/api/charts/data/${testId}`
             : '/api/charts/latest';
 
+        console.log('Fetching from URL:', url);
         const response = await fetch(url);
-        const result = await response.json();
+        console.log('Response status:', response.status);
 
-        if (result.success) {
+        if (!response.ok) {
+            if (response.status === 404) {
+                showError('Henüz tamamlanmış test bulunmuyor. Lütfen önce bir test yapın.');
+                return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('Result received:', result);
+
+        if (result.success && result.data) {
             currentTestId = testId || result.data.statistics.testId;
+            console.log('Current test ID:', currentTestId);
+            console.log('Statistics:', result.data.statistics);
+            console.log('Chart data available:', {
+                pieChart: result.data.pieChartData?.length || 0,
+                barChart: result.data.barChartData?.categories?.length || 0,
+                wordCloud: result.data.wordCloudData?.length || 0
+            });
+
             displayStatistics(result.data.statistics);
             renderCharts(result.data);
             loading.style.display = 'none';
             statisticsSection.style.display = 'block';
         } else {
-            showError('Grafik verileri yüklenemedi');
+            console.error('Invalid result structure:', result);
+            showError('Grafik verileri yüklenemedi. Veri yapısı hatalı.');
         }
     } catch (error) {
         console.error('Load chart data error:', error);
-        showError('Veri yükleme hatası');
+        showError(`Veri yükleme hatası: ${error.message}`);
     }
 }
 
 // Load test list for selector
 async function loadTestList() {
     try {
-        const response = await fetch('/api/charts/tests');
+        // First try to load user's tests
+        const response = await fetch('/api/charts/my-tests');
         const result = await response.json();
 
         if (result.success && result.data.length > 0) {
@@ -52,7 +125,7 @@ async function loadTestList() {
 
             testSelector.style.display = 'block';
 
-            let options = '<option value="">Son Test</option>';
+            let options = '<option value="">Katıldığınız Son Test</option>';
             result.data.forEach(test => {
                 const date = new Date(test.finished_at).toLocaleDateString('tr-TR');
                 options += `<option value="${test.id}">
@@ -96,71 +169,10 @@ function renderCharts(data) {
     chartInstances = {};
 
     // Render each chart
-    renderPieChart(data.pieChartData);
     renderBarChart(data.barChartData);
-    renderLineChart(data.lineChartData);
     renderWordCloud(data.wordCloudData);
 
-    // Handle window resize
-    window.addEventListener('resize', () => {
-        Object.values(chartInstances).forEach(chart => {
-            if (chart && !chart.isDisposed()) {
-                chart.resize();
-            }
-        });
-    });
-}
-
-// Render pie chart
-function renderPieChart(data) {
-    const container = document.getElementById('pieChart');
-    const chart = echarts.init(container);
-    chartInstances.pie = chart;
-
-    const option = {
-        tooltip: {
-            trigger: 'item',
-            formatter: '{b}: {c} ({d}%)'
-        },
-        legend: {
-            type: 'scroll',
-            orient: 'vertical',
-            right: 10,
-            top: 20,
-            bottom: 20
-        },
-        series: [
-            {
-                name: 'Kelimeler',
-                type: 'pie',
-                radius: ['40%', '70%'],
-                center: ['40%', '50%'],
-                avoidLabelOverlap: true,
-                itemStyle: {
-                    borderRadius: 10,
-                    borderColor: '#fff',
-                    borderWidth: 2
-                },
-                label: {
-                    show: false,
-                    position: 'center'
-                },
-                emphasis: {
-                    label: {
-                        show: true,
-                        fontSize: '20',
-                        fontWeight: 'bold'
-                    }
-                },
-                labelLine: {
-                    show: false
-                },
-                data: data
-            }
-        ]
-    };
-
-    chart.setOption(option);
+    // Note: Resize handler is set up once in setupChartResize()
 }
 
 // Render bar chart
@@ -187,7 +199,7 @@ function renderBarChart(data) {
         },
         yAxis: {
             type: 'category',
-            data: data.categories.reverse(),
+            data: [...data.categories].reverse(), // Fix: Create copy before reversing
             axisLabel: {
                 interval: 0,
                 rotate: 0
@@ -197,79 +209,22 @@ function renderBarChart(data) {
             {
                 name: 'Tekrar Sayısı',
                 type: 'bar',
-                data: data.values.reverse(),
+                data: [...data.values].reverse(), // Fix: Create copy before reversing
                 itemStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: '#83bff6' },
-                        { offset: 0.5, color: '#188df0' },
-                        { offset: 1, color: '#188df0' }
-                    ])
+                    color: '#0066cc',
+                    borderRadius: [0, 4, 4, 0]
+                },
+                label: {
+                    show: true,
+                    position: 'right',
+                    formatter: '{c}'
                 },
                 emphasis: {
                     itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                            { offset: 0, color: '#2378f7' },
-                            { offset: 0.7, color: '#2378f7' },
-                            { offset: 1, color: '#83bff6' }
-                        ])
+                        color: '#0052a3',
+                        shadowBlur: 10,
+                        shadowColor: 'rgba(0, 102, 204, 0.3)'
                     }
-                }
-            }
-        ]
-    };
-
-    chart.setOption(option);
-}
-
-// Render line chart
-function renderLineChart(data) {
-    const container = document.getElementById('lineChart');
-    const chart = echarts.init(container);
-    chartInstances.line = chart;
-
-    const option = {
-        tooltip: {
-            trigger: 'axis',
-            formatter: function(params) {
-                const param = params[0];
-                const date = new Date(param.axisValue);
-                const time = date.toLocaleTimeString('tr-TR');
-                return `${time}<br/>Benzersiz Kelime: ${param.value}`;
-            }
-        },
-        xAxis: {
-            type: 'category',
-            data: data.times,
-            axisLabel: {
-                formatter: function(value) {
-                    const date = new Date(value);
-                    return date.toLocaleTimeString('tr-TR', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                }
-            }
-        },
-        yAxis: {
-            type: 'value',
-            name: 'Benzersiz Kelime Sayısı'
-        },
-        series: [
-            {
-                name: 'Benzersiz Kelimeler',
-                type: 'line',
-                data: data.values,
-                smooth: true,
-                symbol: 'none',
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(34, 193, 195, 0.8)' },
-                        { offset: 1, color: 'rgba(34, 193, 195, 0.1)' }
-                    ])
-                },
-                lineStyle: {
-                    width: 3,
-                    color: 'rgb(34, 193, 195)'
                 }
             }
         ]
@@ -314,8 +269,8 @@ function renderWordCloud(data) {
                 fontWeight: 'bold',
                 color: function() {
                     const colors = [
-                        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
-                        '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+                        '#0066cc', '#4a90e2', '#003d7a', '#1e3a5f', '#2c5282',
+                        '#0052a3', '#003366', '#4169e1', '#1e90ff', '#4682b4'
                     ];
                     return colors[Math.floor(Math.random() * colors.length)];
                 }
@@ -354,10 +309,28 @@ async function exportData() {
 
 // Show error message
 function showError(message) {
+    console.error('Error displayed:', message);
     const loading = document.getElementById('loading');
+    const statisticsSection = document.getElementById('statisticsSection');
+
+    // Hide statistics section
+    statisticsSection.style.display = 'none';
+
+    // Show error in loading section
+    loading.style.display = 'block';
     loading.innerHTML = `
-        <div style="color: #f44336; font-size: 18px;">
-            ⚠️ ${message}
+        <div style="color: #f44336; font-size: 18px; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div>${message}</div>
+            <div style="margin-top: 20px; font-size: 14px; color: #666;">
+                <p>Hata devam ederse:</p>
+                <ul style="text-align: left; display: inline-block;">
+                    <li>Önce bir test yapın (Admin panelinden)</li>
+                    <li>Testi bitirdiğinizden emin olun</li>
+                    <li>Sayfayı yenileyin (F5)</li>
+                    <li>Console'da hata detaylarını kontrol edin (F12)</li>
+                </ul>
+            </div>
         </div>
     `;
 }

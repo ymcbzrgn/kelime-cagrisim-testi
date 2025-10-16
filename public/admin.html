@@ -7,11 +7,18 @@
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .admin-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: white;
+            color: #0066cc;
             padding: 20px;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .admin-header h1 {
+            color: #0066cc;
+        }
+        .admin-header p {
+            color: #0066cc;
         }
         .dashboard {
             display: grid;
@@ -91,6 +98,34 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .badge-warning {
+            background: #FFC107;
+            color: white;
+        }
+        .badge-success {
+            background: #4CAF50;
+            color: white;
+        }
+        .badge-secondary {
+            background: #9E9E9E;
+            color: white;
+        }
+        .badge-cancelled {
+            background: #f44336;
+            color: white;
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -103,11 +138,11 @@
             <form id="adminLoginForm">
                 <div class="form-group">
                     <label for="adminUsername">Kullanıcı Adı:</label>
-                    <input type="text" id="adminUsername" required>
+                    <input type="text" id="adminUsername" placeholder="admin" required>
                 </div>
                 <div class="form-group">
                     <label for="adminPassword">Şifre:</label>
-                    <input type="password" id="adminPassword" required>
+                    <input type="password" id="adminPassword" placeholder="admin123" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Giriş Yap</button>
             </form>
@@ -115,10 +150,14 @@
 
         <!-- Dashboard Section -->
         <div id="dashboardSection" style="display: none;">
-            <div class="admin-header">
-                <h1>📊 Admin Paneli</h1>
-                <p>Kelime Çağrışım Testi Yönetimi</p>
-            </div>
+            <header class="admin-header">
+                <div class="logo-container">
+                    <img src="/images/logo (2).png" alt="Eva ICT Logo" width="100" height="80">
+                    <img src="/images/logo (4).png" alt="Partner Logo" width="100" height="80">
+                </div>
+                <h1>Admin Paneli</h1>
+                <p>Kelime Çağrışım Testi Yönetim Sistemi • Kurumsal Platform</p>
+            </header>
 
             <div class="dashboard">
                 <!-- Status Card -->
@@ -142,7 +181,12 @@
 
             <!-- Test Controls -->
             <div class="card">
-                <h3>Test Kontrolü</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Test Kontrolü</h3>
+                    <button class="btn btn-warning" onclick="softReset()" title="Kullanicilari giris ekranina gonder">
+                        Resetle
+                    </button>
+                </div>
                 <form id="testForm">
                     <div class="form-group">
                         <label for="testWord">Test Kelimesi:</label>
@@ -158,14 +202,89 @@
                     <button class="btn btn-finish" id="finishBtn" disabled>
                         🏁 BİTİR
                     </button>
+                    <button class="btn btn-danger" id="cancelBtn" style="display: none;" onclick="cancelTest()">
+                        ❌ İPTAL ET
+                    </button>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-danger" onclick="emergencyReset()"
+                            style="background: #d32f2f; font-size: 14px;">
+                        🚨 ACİL RESET
+                    </button>
                 </div>
             </div>
 
-            <!-- Recent Tests -->
+            <!-- Test History -->
             <div class="card" style="margin-top: 20px;">
-                <h3>Son Testler</h3>
-                <div id="recentTests">
-                    <p style="text-align: center; color: #999;">Yükleniyor...</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>📜 Test Geçmişi</h3>
+                    <button class="btn btn-primary" onclick="loadAllTests()">
+                        🔄 Yenile
+                    </button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table id="testHistoryTable" style="width: 100%; margin-top: 15px;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 10px;">ID</th>
+                                <th style="padding: 10px;">Kelime</th>
+                                <th style="padding: 10px;">Durum</th>
+                                <th style="padding: 10px;">Katılımcı</th>
+                                <th style="padding: 10px;">Tarih</th>
+                                <th style="padding: 10px;">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testHistoryBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 20px; color: #999;">
+                                    Yükleniyor...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Detail Modal -->
+    <div id="testDetailModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Test Detayları</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="showTab('general', event)">📊 Genel</button>
+                <button class="tab-btn" onclick="showTab('participants', event)">👥 Katılımcılar</button>
+                <button class="tab-btn" onclick="showTab('words', event)">💬 Kelimeler</button>
+                <button class="tab-btn" onclick="showTab('charts', event)">📈 Grafikler</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- General Tab -->
+                <div id="generalTab" class="tab-content active">
+                    <div id="generalContent">Yükleniyor...</div>
+                </div>
+
+                <!-- Participants Tab -->
+                <div id="participantsTab" class="tab-content" style="display: none;">
+                    <div id="participantsContent">Yükleniyor...</div>
+                </div>
+
+                <!-- Words Tab -->
+                <div id="wordsTab" class="tab-content" style="display: none;">
+                    <div id="wordsContent">Yükleniyor...</div>
+                </div>
+
+                <!-- Charts Tab -->
+                <div id="chartsTab" class="tab-content" style="display: none;">
+                    <div id="chartsContent">
+                        <div id="modalPieChart" style="height: 400px;"></div>
+                        <div id="modalBarChart" style="height: 400px; margin-top: 20px;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -173,6 +292,8 @@
 
     <!-- Socket.io -->
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <!-- ECharts for modal charts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="/js/admin.js"></script>
 </body>
 </html>

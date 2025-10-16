@@ -53,8 +53,8 @@ async function checkUserStatus() {
         showSection('login');
     }
 
-    // Check for redirect periodically
-    setInterval(checkRedirect, 5000);
+    // Note: Redirect is handled by WebSocket 'test-finished' event (line 105-110)
+    // No need for polling as it's redundant and wastes server resources
 }
 
 // Initialize WebSocket connection
@@ -119,6 +119,80 @@ function initializeSocket() {
 
     socket.on('error', (data) => {
         showAlert(data.message, 'error');
+    });
+
+    // Handle reset events
+    socket.on('force-refresh', () => {
+        showAlert('Admin yenileme isteği alındı. Sayfa yenileniyor...', 'info');
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    });
+    socket.on('user-reset', () => {
+        showAlert('Admin sizi baslangic ekranina gonderiyor. Lutfen isminizi yeniden girin.', 'warning');
+
+        localStorage.removeItem('sessionId');
+        localStorage.removeItem('username');
+
+        sessionId = null;
+        username = null;
+        hasSubmitted = false;
+        testActive = false;
+
+        setTimeout(() => {
+            if (socket && socket.connected) {
+                socket.disconnect();
+            }
+            window.location.href = '/';
+        }, 1500);
+    });
+
+    socket.on('test-cancelled', (data) => {
+        showAlert('Test iptal edildi. Ana sayfaya yönlendiriliyorsunuz...', 'warning');
+        hasSubmitted = false;
+        testActive = false;
+        localStorage.removeItem('sessionId');
+        localStorage.removeItem('username');
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    });
+
+    socket.on('emergency-reset', (data) => {
+        console.log('🚨 EMERGENCY RESET received:', data);
+        showAlert('Acil reset! Sistem tamamen sıfırlanıyor...', 'error');
+
+        // Step 1: Clear all browser storage
+        try {
+            localStorage.clear();
+            sessionStorage.clear();
+            console.log('✓ Storage cleared');
+        } catch (e) {
+            console.error('Storage clear error:', e);
+        }
+
+        // Step 2: Clear cookies (best effort)
+        try {
+            document.cookie.split(";").forEach(function(c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+            console.log('✓ Cookies cleared');
+        } catch (e) {
+            console.error('Cookie clear error:', e);
+        }
+
+        // Step 3: Disconnect socket
+        if (socket) {
+            socket.disconnect();
+            console.log('✓ Socket disconnected');
+        }
+
+        // Step 4: Force reload with cache bypass
+        setTimeout(() => {
+            // location.reload(true) is deprecated but still works
+            // Use cache-control header bypass
+            window.location.href = window.location.href.split('?')[0] + '?_=' + Date.now();
+        }, 2000);
     });
 }
 
@@ -201,7 +275,7 @@ function setupEventListeners() {
         document.getElementById('submitBtn').disabled = true;
 
         try {
-            // Send via API
+            // Send via API only (API handles WebSocket notification internally)
             const response = await fetch('/api/user/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -210,10 +284,7 @@ function setupEventListeners() {
 
             const data = await response.json();
 
-            if (data.success) {
-                // Also send via WebSocket for real-time update
-                socket.emit('submit-words', { words });
-            } else {
+            if (!data.success) {
                 showAlert(data.error || 'Gönderme hatası', 'error');
                 document.getElementById('submitBtn').disabled = false;
             }
