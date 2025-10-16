@@ -1,39 +1,14 @@
-// Authentication Middleware
+// Authentication Middleware - DISABLED FOR QUICK ACCESS
 const checkAdminAuth = (req, res, next) => {
-    // Check if admin is logged in via session
-    if (req.session && req.session.isAdmin) {
-        return next();
-    }
-
-    // Check Basic Auth header
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).json({ error: 'Yetkilendirme gerekli' });
-    }
-
-    const auth = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
-    const username = auth[0];
-    const password = auth[1];
-
-    // Verify credentials
-    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-        req.session.isAdmin = true;
-        return next();
-    }
-
-    return res.status(401).json({ error: 'Geçersiz kullanıcı adı veya şifre' });
+    // Auth disabled - allow all
+    req.session.isAdmin = true;
+    return next();
 };
 
-// Simple auth check for login
+// Simple auth check for login - DISABLED
 const adminLogin = (req, res) => {
-    const { username, password } = req.body;
-
-    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-        req.session.isAdmin = true;
-        return res.json({ success: true, message: 'Giriş başarılı' });
-    }
-
-    return res.status(401).json({ error: 'Geçersiz kullanıcı adı veya şifre' });
+    req.session.isAdmin = true;
+    return res.json({ success: true, message: 'Giriş başarılı' });
 };
 
 // Logout handler
